@@ -2,9 +2,7 @@
 #define FENCE_DISTANCE_H
 
 // calculate the distance in a fence queue
-int fence_distance (int buf_queue_adr, int fifo_wadr) {
-
-    int buffer_size = 2048;
+int fence_distance (int buf_queue_adr, int fifo_wadr, int buffer_size) {
 
     int fifo_pretrig_cfeb    = 7;
     int fifo_pretrig_gem_rpc = 7;
@@ -23,7 +21,7 @@ int fence_distance (int buf_queue_adr, int fifo_wadr) {
 
     int next_fence_adr = buf_queue_adr-buf_setback;  // compensate for pre-trig latency
 
-    int distance = 0x7ff & ((next_fence_adr - fifo_wadr) % buffer_size);
+    int distance = (buffer_size-1) & ((next_fence_adr - fifo_wadr) % buffer_size);
 
     return distance;
 }
