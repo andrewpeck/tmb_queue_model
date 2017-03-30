@@ -1,63 +1,108 @@
 #include "l1a_latency.C"
 
+
 void gen_plots () {
 
     TCanvas *c1 = new TCanvas("c1");
-    c1->SetWindowSize(1800, 1280);
-    c1->Divide(2,2);
+    c1->SetWindowSize(2400, 1280);
+    c1->Divide(3,2);
 
     TFile* hfile = new TFile("tmb_model.root","READ","TMB Queue Model");
 
-    TF1* me11_theory = l1a_latency();
+    TF1* me11_theory = l1a_latency(0);
+    TF1* me21_theory = l1a_latency(1);
+    TF1* me31_theory = l1a_latency(2);
+    TF1* me41_theory = l1a_latency(3);
 
-    TH2F* th2f_lostevents_me11 = (TH2F*) hfile->Get("Lost Events ME11");
-    TH2F* th2f_lostevents_me21 = (TH2F*) hfile -> Get ("Lost Events ME21");
-    TH2F* th2f_lostevents_me31 = (TH2F*) hfile -> Get ("Lost Events ME31");
-    TH2F* th2f_lostevents_me41 = (TH2F*) hfile -> Get ("Lost Events ME41");
+    // TF1* l1a_latency (int station=0, bool ddr=false, bool gem_en=false, bool deep_buf=false, bool unfurled_triads=false, int n_tbins=12) {
 
-    TH2F* th2f_lostevents_ddr_me11 = (TH2F*) hfile -> Get ("Lost Events DDR ME11");
-    TH2F* th2f_lostevents_ddr_me21 = (TH2F*) hfile -> Get ("Lost Events DDR ME21");
-    TH2F* th2f_lostevents_ddr_me31 = (TH2F*) hfile -> Get ("Lost Events DDR ME31");
-    TH2F* th2f_lostevents_ddr_me41 = (TH2F*) hfile -> Get ("Lost events DDR ME41");
+    TF1* me11_theory_ddr          = l1a_latency(0, true);
+    TF1* me11_theory_gem          = l1a_latency(0, false, true);
+    TF1* me11_theory_gem_ddr      = l1a_latency(0, true,  true);
+    TF1* me11_theory_deep         = l1a_latency(0, false, false, true);
+    TF1* me11_theory_unfurled_ddr = l1a_latency(0, true,  false, false, true);
+    TF1* me11_theory_14tbins      = l1a_latency(0, false, false, false, false, 14);
+    TF1* me11_theory_14tbins_ddr  = l1a_latency(0, true,  false, false, false, 14);
 
-    TH2F* th2f_lostevents_gem_me11 = (TH2F*) hfile -> Get("Lost Events GEM ME11");
+    me11_theory -> SetLineColor(kBlack);
+    me21_theory -> SetLineColor(kBlack);
+    me31_theory -> SetLineColor(kBlack);
+    me41_theory -> SetLineColor(kBlack);
 
-    TH2F* th2f_lostevents_deep_me11   = (TH2F*) hfile -> Get ("Lost Events Deep Buffer ME11");
+    me11_theory -> SetLineStyle(2);
+    me21_theory -> SetLineStyle(2);
+    me31_theory -> SetLineStyle(2);
+    me41_theory -> SetLineStyle(2);
 
-    TH2F* th2f_lostevents_low_l1_me11 = (TH2F*) hfile -> Get ("Lost Events LOWL1 ME11");
+    me11_theory_ddr          -> SetLineStyle(2);
+    me11_theory_gem          -> SetLineStyle(2);
+    me11_theory_deep         -> SetLineStyle(2);
+    me11_theory_unfurled_ddr -> SetLineStyle(2);
 
-    TH2F* th2f_occupancy = (TH2F*) hfile->Get("Mean Queue Occupancy");
+    me11_theory_ddr          -> SetLineColor (kBlack);
+    me11_theory_gem          -> SetLineColor (kBlack);
+    me11_theory_deep         -> SetLineColor(kBlack);
+    me11_theory_unfurled_ddr -> SetLineColor(kBlack);
 
-    TH2F* lostevents_arr [4] = {th2f_lostevents_me11, th2f_lostevents_me21, th2f_lostevents_me31,  th2f_lostevents_me41};
-    TH2F* lostevents_ddr_arr [4] = {th2f_lostevents_ddr_me11, th2f_lostevents_ddr_me21, th2f_lostevents_ddr_me31,  th2f_lostevents_ddr_me41};
+
+    TH2F* th2f_lostevents_me11 = (TH2F*) hfile -> Get ("h2_loss_me11");
+    TH2F* th2f_lostevents_me21 = (TH2F*) hfile -> Get ("h2_loss_me21");
+    TH2F* th2f_lostevents_me31 = (TH2F*) hfile -> Get ("h2_loss_me31");
+    TH2F* th2f_lostevents_me41 = (TH2F*) hfile -> Get ("h2_loss_me41");
+
+    TH2F* th2f_lostevents_ddr_me11 = (TH2F*) hfile -> Get ("h2_loss_me11_ddr");
+    TH2F* th2f_lostevents_ddr_me21 = (TH2F*) hfile -> Get ("h2_loss_me21_ddr");
+    TH2F* th2f_lostevents_ddr_me31 = (TH2F*) hfile -> Get ("h2_loss_me31_ddr");
+    TH2F* th2f_lostevents_ddr_me41 = (TH2F*) hfile -> Get ("h2_loss_me41_ddr");
+
+    TH2F* th2f_lostevents_unfurled_ddr_me11 = (TH2F*) hfile -> Get ("h2_loss_me11_unfurled_ddr");
+
+    TH2F* th2f_lostevents_gem_me11 = (TH2F*) hfile -> Get("h2_loss_me11_gem");
+
+    TH2F* th2f_lostevents_deep_me11   = (TH2F*) hfile -> Get ("h2_loss_me11_deep");
+
+    TH2F* th2f_lostevents_low_l1_me11 = (TH2F*) hfile -> Get ("h2_loss_me11_lowl1");
+
+    TH2F* th2f_occupancy = (TH2F*) hfile->Get("h2_queue_occupancy");
+
+    TH2F* lostevents_arr     [4] = {th2f_lostevents_me11     , th2f_lostevents_me21     , th2f_lostevents_me31     , th2f_lostevents_me41};
+    TH2F* lostevents_ddr_arr [4] = {th2f_lostevents_ddr_me11 , th2f_lostevents_ddr_me21 , th2f_lostevents_ddr_me31 , th2f_lostevents_ddr_me41};
 
     //------------------------------------------------------------------------------------------------------------------
     // Profiles
     //------------------------------------------------------------------------------------------------------------------
 
     //ProfileX (const char *name="_pfx", Int_t firstybin=1, Int_t lastybin=-1, Option_t *option="") const
-    TProfile *me11 = th2f_lostevents_me11->ProfileX("px11",1,-1,"o");
-    TProfile *me21 = th2f_lostevents_me21->ProfileX("px21",1,-1,"o");
-    TProfile *me31 = th2f_lostevents_me31->ProfileX("px31",1,-1,"o");
-    TProfile *me41 = th2f_lostevents_me41->ProfileX("px41",1,-1,"o");
 
-    TProfile *me11_ddr   = th2f_lostevents_ddr_me11->ProfileX("px11_ddr",1,-1,"o");
-    TProfile *me11_deep  = th2f_lostevents_deep_me11->ProfileX("px11_deep",1,-1,"o");
-    TProfile *me11_lowl1 = th2f_lostevents_low_l1_me11->ProfileX("px11_lowl1",1,-1,"o");
-    TProfile *me11_gem   = th2f_lostevents_gem_me11->ProfileX("px11_gem",1,-1,"o");
+    TProfile *me11 = th2f_lostevents_me11 -> ProfileX("me11" , 1 , -1 , "o");
+    TProfile *me21 = th2f_lostevents_me21 -> ProfileX("me21" , 1 , -1 , "o");
+    TProfile *me31 = th2f_lostevents_me31 -> ProfileX("me31" , 1 , -1 , "o");
+    TProfile *me41 = th2f_lostevents_me41 -> ProfileX("me41" , 1 , -1 , "o");
+
+    me11 -> GetYaxis() -> SetTitle("loss rate");
+    me21 -> GetYaxis() -> SetTitle("loss rate");
+    me31 -> GetYaxis() -> SetTitle("loss rate");
+    me41 -> GetYaxis() -> SetTitle("loss rate");
+
+    TProfile *me11_ddr          = th2f_lostevents_ddr_me11          -> ProfileX("me11_ddr"          , 1 , -1 , "o");
+    TProfile *me11_deep         = th2f_lostevents_deep_me11         -> ProfileX("me11_deep"         , 1 , -1 , "o");
+    TProfile *me11_lowl1        = th2f_lostevents_low_l1_me11       -> ProfileX("me11_lowl1"        , 1 , -1 , "o");
+    TProfile *me11_gem          = th2f_lostevents_gem_me11          -> ProfileX("me11_gem"          , 1 , -1 , "o");
+    TProfile *me11_unfurled_ddr = th2f_lostevents_unfurled_ddr_me11 -> ProfileX("me11_unfurled_ddr" , 1 , -2 , "0");
 
     me11->SetMaximum(1.0);
     me11->SetMinimum(0.0);
 
-    me11_ddr->Rebin(4);
-    me11_deep->Rebin(4);
-    me11_lowl1->Rebin(4);
-    me11_gem->Rebin(4);
+    // me11_ddr          -> Rebin(4);
+    // me11_deep         -> Rebin(4);
+    // me11_lowl1        -> Rebin(4);
+    // me11_gem          -> Rebin(4);
+    // me11_unfurled_ddr -> Rebin(4);
 
-    me11->Rebin(4);
-    me21->Rebin(4);
-    me31->Rebin(4);
-    me41->Rebin(4);
+    // me11->Rebin(4);
+    // me21->Rebin(4);
+    // me31->Rebin(4);
+    // me41->Rebin(4);
 
     //------------------------------------------------------------------------------------------------------------------
     //
@@ -100,8 +145,7 @@ void gen_plots () {
 
     c1->cd(1);
 
-    // th2f_occupancy->Draw();
-    // th2f_occupancy->SetMarkerStyle(3);
+    gStyle->SetOptTitle(0);
 
     me11        -> SetStats(0);
     me11        -> Draw();
@@ -125,10 +169,16 @@ void gen_plots () {
     c1->cd(3);
 
     me11        -> SetStats(0);
+
+    //-Baseline---------------------------------------------------------------------------------------------------------
     me11        -> Draw();
-    me11_ddr    -> Draw("SAME");
-    me11_deep   -> Draw("SAME");
-    me11_gem    -> Draw("SAME");
+
+    //-Alternates-------------------------------------------------------------------------------------------------------
+
+    me11_ddr          -> Draw("SAME");
+    me11_deep         -> Draw("SAME");
+    me11_gem          -> Draw("SAME");
+    me11_unfurled_ddr -> Draw("SAME");
 
     me11_deep->SetMarkerStyle(3);
     me11_deep->SetMarkerColor(kRed-4);
@@ -139,17 +189,42 @@ void gen_plots () {
     me11_gem->SetMarkerStyle(3);
     me11_gem->SetMarkerColor(kMagenta-6);
 
+    me11_unfurled_ddr->SetMarkerStyle(3);
+    me11_unfurled_ddr->SetMarkerColor(kGreen+4);
+
+    //-Theory-----------------------------------------------------------------------------------------------------------
+
+    me11_theory              -> Draw("SAME");
+    me11_theory_ddr          -> Draw("SAME");
+    me11_theory_gem          -> Draw("SAME");
+    me11_theory_deep         -> Draw("SAME");
+    me11_theory_unfurled_ddr -> Draw("SAME");
+
+
+    //-Legend-----------------------------------------------------------------------------------------------------------
+
     TLegend* leg3 = new TLegend(0.1,0.65,0.48,0.85);
+
     leg3->AddEntry(me11,"Baseline","pe");
-    leg3->AddEntry(me11_deep,"Increased buffer depth","pe");
+    leg3->AddEntry(me11_deep,"Buffer depth x2","pe");
     leg3->AddEntry(me11_gem,"GEM Readout","pe");
     leg3->AddEntry(me11_ddr,"DDR Readout","pe");
+    leg3->AddEntry(me11_unfurled_ddr,"Unfurled Triads w/ DDR","pe");
+    leg3->AddEntry(me11_theory,"M/D/1 Models","l");
+
     leg3->SetFillStyle(0);
     leg3->SetBorderSize(0);
     leg3->Draw();
 
+    Float_t ymax = 1;
+    //TLine *line = new TLine(0,ymax/2,50,ymax/2);
+    TLine *line = new TLine(7.5,0,7.5,ymax/2);
+    line->SetLineColor(kGray);
+    line->Draw();
+
+
     //------------------------------------------------------------------------------------------------------------------
-    // Station Comparison
+    // Monte Carlo vs. Data
     //------------------------------------------------------------------------------------------------------------------
 
     c1->cd(2);
@@ -166,7 +241,7 @@ void gen_plots () {
     leg2->Draw();
 
     //------------------------------------------------------------------------------------------------------------------
-    //
+    // Station Comparison
     //------------------------------------------------------------------------------------------------------------------
 
     c1->cd(4);
@@ -176,6 +251,11 @@ void gen_plots () {
     me31->Draw("SAME");
     me41->Draw("SAME");
 
+    me11_theory->Draw("SAME");
+    me21_theory->Draw("SAME");
+    me31_theory->Draw("SAME");
+    me41_theory->Draw("SAME");
+
     TLegend* leg4 = new TLegend(0.1,0.65,0.48,0.85);
     leg4->AddEntry(me11,"ME1/1","pe");
     leg4->AddEntry(me21,"ME2/1","pe");
@@ -184,6 +264,32 @@ void gen_plots () {
     leg4->SetFillStyle(0);
     leg4->SetBorderSize(0);
     leg4->Draw();
+
+    //------------------------------------------------------------------------------------------------------------------
+    //
+    //------------------------------------------------------------------------------------------------------------------
+
+    c1->cd(5);
+
+
+    me11_theory->Draw();
+    me11_theory_14tbins      ->Draw("same");
+    me11_theory_14tbins_ddr  ->Draw("same");
+    me11_theory_ddr          ->Draw("same");
+
+    TLegend* leg5 = new TLegend(0.15,0.65,0.48,0.85);
+
+    leg5->AddEntry(me11_theory             , "ME1/1 12 tbins @ 40MHz" , "l");
+    leg5->AddEntry(me11_theory_14tbins     , "ME1/1 14 tbins @ 40MHz" , "l");
+
+    leg5->AddEntry(me11_theory_ddr         , "ME1/1 12 tbins @ 80MHz" , "l");
+    leg5->AddEntry(me11_theory_14tbins_ddr , "ME1/1 14 tbins @ 80MHz" , "l");
+
+    leg5->SetFillStyle(0);
+    leg5->SetBorderSize(0);
+
+    leg5->Draw();
+
 
 
 }

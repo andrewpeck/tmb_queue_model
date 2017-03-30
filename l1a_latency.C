@@ -58,12 +58,14 @@ double blocking_probability (float queue_size, double traffic_intensity) {
 // Calculate the time required to readout the DMB for a single event:
 // (add up all the data words, divide by the bandwidth)
 //----------------------------------------------------------------------------------------------------------------------
-TF1* l1a_latency () {
+TF1* l1a_latency (int station=0, bool ddr=false, bool gem_en=false, bool deep_buf=false, bool unfurled_triads=false, int n_tbins=12) {
 
 
-    int dmb_frame_cnt = frame_count();
+    int n_cfebs = (station==0) ? 7 : 5;
 
-    int buffer_size = 2048;
+    int dmb_frame_cnt = frame_count(n_cfebs, gem_en, unfurled_triads, n_tbins) / (ddr ? 2 : 1);
+
+    int buffer_size = deep_buf ? 4096 : 2048;
     int minimum_fence = 64;
 
     //float maximum_occupancy = (float(buffer_size));
@@ -96,7 +98,7 @@ TF1* l1a_latency () {
 
     // lct*l1a rate  [Hz]   = lumi_rate [10^34] * 10000 * lumi_scaler
     //double intensity_coefficient = (lumi_rate_me11 * 10000.0 * dmb_frame_cnt) / (pow(10,9) * 1.0/25);
-    double intensity_coefficient = (lumi_rate_me11 * 10000.0 * dmb_frame_cnt) / (40000000.);
+    double intensity_coefficient = (lumi_rate_arr[station] * 10000.0 * dmb_frame_cnt) / (40000000.);
 
     ovf->SetParameter(1,  intensity_coefficient); // service time has units seconds/packet
 

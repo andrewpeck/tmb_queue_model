@@ -1,15 +1,15 @@
 #ifndef FRAME_COUNT_H
 #define FRAME_COUNT_H 
 
-int frame_count (int n_cfebs=7, int gem_en=0) {
+int frame_count (int n_cfebs=7, int gem_en=0, bool unfurled_triads=0, int n_tbins=12) {
 
     bool debug=0;
 
     int n_headers    = 42;
     //int n_cfebs      = 7;
+    //int n_tbins      = 12;
     int n_gems       = 2;
     int n_rpcs       = 2;
-    int n_tbins      = 12;
     int n_scope_chan = 128;
 
     bool rpc_en               = false;
@@ -22,7 +22,7 @@ int frame_count (int n_cfebs=7, int gem_en=0) {
     int wc_eob        = 1;
 
     // cfeb
-    int wc_cfeb       = n_cfebs * 6 * n_tbins;
+    int wc_cfeb       = n_cfebs * 6 * n_tbins  * (unfurled_triads ? 4 : 1);
 
 
     // rpc + gem
