@@ -1,11 +1,16 @@
 #include "l1a_latency.C"
 
+#include <TH2F.h>
+#include <TF1.h>
+#include <TCanvas.h>
+#include <TFile.h>
+#include <TProfile.h>
 
 void gen_plots () {
 
     TCanvas *c1 = new TCanvas("c1");
-    c1->SetWindowSize(2400, 1280);
-    c1->Divide(3,2);
+    c1->SetWindowSize(2600, 1280);
+    c1->Divide(4,2);
 
     TFile* hfile = new TFile("tmb_model.root","READ","TMB Queue Model");
 
@@ -36,11 +41,13 @@ void gen_plots () {
 
     me11_theory_ddr          -> SetLineStyle(2);
     me11_theory_gem          -> SetLineStyle(2);
+    me11_theory_gem_ddr      -> SetLineStyle(2);
     me11_theory_deep         -> SetLineStyle(2);
     me11_theory_unfurled_ddr -> SetLineStyle(2);
 
     me11_theory_ddr          -> SetLineColor (kBlack);
     me11_theory_gem          -> SetLineColor (kBlack);
+    me11_theory_gem_ddr      -> SetLineColor (kBlack);
     me11_theory_deep         -> SetLineColor(kBlack);
     me11_theory_unfurled_ddr -> SetLineColor(kBlack);
 
@@ -58,12 +65,12 @@ void gen_plots () {
     TH2F* th2f_lostevents_unfurled_ddr_me11 = (TH2F*) hfile -> Get ("h2_loss_me11_unfurled_ddr");
 
     TH2F* th2f_lostevents_gem_me11 = (TH2F*) hfile -> Get("h2_loss_me11_gem");
+    TH2F* th2f_lostevents_gem_ddr_me11 = (TH2F*) hfile -> Get("h2_loss_me11_gem_ddr");
 
     TH2F* th2f_lostevents_deep_me11   = (TH2F*) hfile -> Get ("h2_loss_me11_deep");
 
     TH2F* th2f_lostevents_low_l1_me11 = (TH2F*) hfile -> Get ("h2_loss_me11_lowl1");
 
-    TH2F* th2f_occupancy = (TH2F*) hfile->Get("h2_queue_occupancy");
 
     TH2F* lostevents_arr     [4] = {th2f_lostevents_me11     , th2f_lostevents_me21     , th2f_lostevents_me31     , th2f_lostevents_me41};
     TH2F* lostevents_ddr_arr [4] = {th2f_lostevents_ddr_me11 , th2f_lostevents_ddr_me21 , th2f_lostevents_ddr_me31 , th2f_lostevents_ddr_me41};
@@ -88,21 +95,23 @@ void gen_plots () {
     TProfile *me11_deep         = th2f_lostevents_deep_me11         -> ProfileX("me11_deep"         , 1 , -1 , "o");
     TProfile *me11_lowl1        = th2f_lostevents_low_l1_me11       -> ProfileX("me11_lowl1"        , 1 , -1 , "o");
     TProfile *me11_gem          = th2f_lostevents_gem_me11          -> ProfileX("me11_gem"          , 1 , -1 , "o");
+    TProfile *me11_gem_ddr      = th2f_lostevents_gem_ddr_me11      -> ProfileX("me11_gem_ddr"      , 1 , -1 , "o");
     TProfile *me11_unfurled_ddr = th2f_lostevents_unfurled_ddr_me11 -> ProfileX("me11_unfurled_ddr" , 1 , -2 , "0");
 
     me11->SetMaximum(1.0);
     me11->SetMinimum(0.0);
 
-    // me11_ddr          -> Rebin(4);
-    // me11_deep         -> Rebin(4);
-    // me11_lowl1        -> Rebin(4);
-    // me11_gem          -> Rebin(4);
-    // me11_unfurled_ddr -> Rebin(4);
+    me11_ddr          -> Rebin(4);
+    me11_deep         -> Rebin(4);
+    me11_lowl1        -> Rebin(4);
+    me11_gem          -> Rebin(4);
+    me11_gem_ddr      -> Rebin(4);
+    me11_unfurled_ddr -> Rebin(4);
 
-    // me11->Rebin(4);
-    // me21->Rebin(4);
-    // me31->Rebin(4);
-    // me41->Rebin(4);
+    me11->Rebin(50);
+    me21->Rebin(50);
+    me31->Rebin(50);
+    me41->Rebin(50);
 
     //------------------------------------------------------------------------------------------------------------------
     //
@@ -161,7 +170,6 @@ void gen_plots () {
     leg1->SetBorderSize(0);
     leg1->Draw();
 
-
     //------------------------------------------------------------------------------------------------------------------
     // ME1/1 Mitigation Comparison
     //------------------------------------------------------------------------------------------------------------------
@@ -177,8 +185,6 @@ void gen_plots () {
 
     me11_ddr          -> Draw("SAME");
     me11_deep         -> Draw("SAME");
-    me11_gem          -> Draw("SAME");
-    me11_unfurled_ddr -> Draw("SAME");
 
     me11_deep->SetMarkerStyle(3);
     me11_deep->SetMarkerColor(kRed-4);
@@ -186,19 +192,11 @@ void gen_plots () {
     me11_ddr->SetMarkerStyle(3);
     me11_ddr->SetMarkerColor(kGreen-3);
 
-    me11_gem->SetMarkerStyle(3);
-    me11_gem->SetMarkerColor(kMagenta-6);
-
-    me11_unfurled_ddr->SetMarkerStyle(3);
-    me11_unfurled_ddr->SetMarkerColor(kGreen+4);
-
     //-Theory-----------------------------------------------------------------------------------------------------------
 
     me11_theory              -> Draw("SAME");
     me11_theory_ddr          -> Draw("SAME");
-    me11_theory_gem          -> Draw("SAME");
     me11_theory_deep         -> Draw("SAME");
-    me11_theory_unfurled_ddr -> Draw("SAME");
 
 
     //-Legend-----------------------------------------------------------------------------------------------------------
@@ -207,14 +205,89 @@ void gen_plots () {
 
     leg3->AddEntry(me11,"Baseline","pe");
     leg3->AddEntry(me11_deep,"Buffer depth x2","pe");
-    leg3->AddEntry(me11_gem,"GEM Readout","pe");
     leg3->AddEntry(me11_ddr,"DDR Readout","pe");
-    leg3->AddEntry(me11_unfurled_ddr,"Unfurled Triads w/ DDR","pe");
     leg3->AddEntry(me11_theory,"M/D/1 Models","l");
 
     leg3->SetFillStyle(0);
     leg3->SetBorderSize(0);
     leg3->Draw();
+
+    //------------------------------------------------------------------------------------------------------------------
+    // ME1/1 GEM Comparison
+    //------------------------------------------------------------------------------------------------------------------
+
+    c1->cd(7);
+
+    me11        -> SetStats(0);
+
+    //-Baseline---------------------------------------------------------------------------------------------------------
+    me11        -> Draw();
+
+    //-Alternates-------------------------------------------------------------------------------------------------------
+
+    me11_gem          -> Draw("SAME");
+    me11_gem_ddr      -> Draw("SAME");
+
+    me11_gem->SetMarkerStyle(3);
+    me11_gem->SetMarkerColor(kMagenta-6);
+
+    //-Theory-----------------------------------------------------------------------------------------------------------
+
+    me11_theory              -> Draw("SAME");
+    me11_theory_gem          -> Draw("SAME");
+    me11_theory_ddr          -> Draw("SAME");
+    me11_theory_gem_ddr      -> Draw("SAME");
+
+    //-Legend-----------------------------------------------------------------------------------------------------------
+
+    TLegend* leg7 = new TLegend(0.1,0.65,0.48,0.85);
+
+    leg7->AddEntry(me11,    "Baseline, l1=500bx","pe");
+    leg7->AddEntry(me11_gem,"Baseline with GEM, l1=500bx","pe");
+    leg7->AddEntry(me11_ddr,"DDR Readout, l1=500bx","pe");
+    leg7->AddEntry(me11_gem_ddr,"DDR Readout with GEM, l1=500bx","pe");
+
+    leg7->AddEntry(me11_theory,"M/D/1 Models","l");
+
+    leg7->SetFillStyle(0);
+    leg7->SetBorderSize(0);
+    leg7->Draw();
+
+    //------------------------------------------------------------------------------------------------------------------
+    // ME1/1 Unfurled Triads
+    //------------------------------------------------------------------------------------------------------------------
+
+    c1->cd(8);
+
+    me11        -> SetStats(0);
+
+    //-Baseline---------------------------------------------------------------------------------------------------------
+    me11        -> Draw();
+
+    //-Alternates-------------------------------------------------------------------------------------------------------
+
+    me11_unfurled_ddr -> Draw("SAME");
+
+    me11_unfurled_ddr->SetMarkerStyle(3);
+    me11_unfurled_ddr->SetMarkerColor(kGreen+4);
+
+    //-Theory-----------------------------------------------------------------------------------------------------------
+
+    me11_theory              -> Draw("SAME");
+    me11_theory_unfurled_ddr -> Draw("SAME");
+
+
+    //-Legend-----------------------------------------------------------------------------------------------------------
+
+    TLegend* leg8 = new TLegend(0.1,0.65,0.48,0.85);
+
+    leg8->AddEntry(me11,"Baseline","pe");
+    leg8->AddEntry(me11_unfurled_ddr,"Unfurled Triads w/ DDR","pe");
+    leg8->AddEntry(me11_theory,"M/D/1 Models","l");
+
+    leg8->SetFillStyle(0);
+    leg8->SetBorderSize(0);
+    leg8->Draw();
 
     Float_t ymax = 1;
     //TLine *line = new TLine(0,ymax/2,50,ymax/2);
@@ -290,6 +363,22 @@ void gen_plots () {
 
     leg5->Draw();
 
+    //------------------------------------------------------------------------------------------------------------------
+    //
+    //------------------------------------------------------------------------------------------------------------------
 
+    c1->cd(6);
+
+    TH2F* th2f_occupancy   = (TH2F*) hfile->Get("h2_queue_occupancy");
+    TH2F* th2f_event_sep   = (TH2F*) hfile->Get("h2_event_sep");
+    TH2F* th2f_pretrig_sep = (TH2F*) hfile->Get("h2_pretrig_sep");
+
+    //TProfile *event_sep = th2f_event_sep -> ProfileX("event sepaparation me1/1" , 1 , -1 , "o");
+    TProfile *pretrig_sep = th2f_pretrig_sep -> ProfileX("pretrig separation me1/1" , 1 , -1 , "o");
+
+    pretrig_sep->SetMarkerColor(kRed);
+    pretrig_sep->SetMarkerStyle(3);
+
+    pretrig_sep->Draw();
 
 }

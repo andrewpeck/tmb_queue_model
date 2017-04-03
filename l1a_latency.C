@@ -1,6 +1,9 @@
 #include <cmath>
 #include "frame_count.h"
 
+#include <TMath.h>
+#include <TF1.h>
+
 // model the TMB as a M/D/1 queue
 // Poisson arrivals, constant service times, 1 server
 
@@ -103,8 +106,8 @@ TF1* l1a_latency (int station=0, bool ddr=false, bool gem_en=false, bool deep_bu
     ovf->SetParameter(1,  intensity_coefficient); // service time has units seconds/packet
 
 
-    ovf->SetNpx(100);
     ovf->GetHistogram()->GetXaxis()->SetTitle("luminosity (10^34 cm-2 s-1)");
+    ovf->SetNpx(100);
     //ovf->Draw();
     //c1->SetLogy();
     ovf->SetTitle("overflow probability");

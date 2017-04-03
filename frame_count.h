@@ -1,5 +1,7 @@
 #ifndef FRAME_COUNT_H
-#define FRAME_COUNT_H 
+#define FRAME_COUNT_H
+
+#include <cstdio>
 
 int frame_count (int n_cfebs=7, int gem_en=0, bool unfurled_triads=0, int n_tbins=12) {
 
