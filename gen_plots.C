@@ -22,6 +22,7 @@ void gen_plots () {
     // TF1* l1a_latency (int station=0, bool ddr=false, bool gem_en=false, bool deep_buf=false, bool unfurled_triads=false, int n_tbins=12) {
 
     TF1* me11_theory_ddr          = l1a_latency(0, true);
+    TF1* me11_theory_ddr_deep     = l1a_latency(0, true, false, true);
     TF1* me11_theory_gem          = l1a_latency(0, false, true);
     TF1* me11_theory_gem_ddr      = l1a_latency(0, true,  true);
     TF1* me11_theory_deep         = l1a_latency(0, false, false, true);
@@ -40,12 +41,14 @@ void gen_plots () {
     me41_theory -> SetLineStyle(2);
 
     me11_theory_ddr          -> SetLineStyle(2);
+    me11_theory_ddr_deep     -> SetLineStyle(2);
     me11_theory_gem          -> SetLineStyle(2);
     me11_theory_gem_ddr      -> SetLineStyle(2);
     me11_theory_deep         -> SetLineStyle(2);
     me11_theory_unfurled_ddr -> SetLineStyle(2);
 
     me11_theory_ddr          -> SetLineColor (kBlack);
+    me11_theory_ddr_deep     -> SetLineColor (kBlack);
     me11_theory_gem          -> SetLineColor (kBlack);
     me11_theory_gem_ddr      -> SetLineColor (kBlack);
     me11_theory_deep         -> SetLineColor(kBlack);
@@ -101,17 +104,18 @@ void gen_plots () {
     me11->SetMaximum(1.0);
     me11->SetMinimum(0.0);
 
-    me11_ddr          -> Rebin(4);
-    me11_deep         -> Rebin(4);
-    me11_lowl1        -> Rebin(4);
-    me11_gem          -> Rebin(4);
-    me11_gem_ddr      -> Rebin(4);
-    me11_unfurled_ddr -> Rebin(4);
+    me11_ddr          -> Rebin(2);
+    me11_deep         -> Rebin(2);
+    me11_lowl1        -> Rebin(2);
+    me11_gem          -> Rebin(2);
+    me11_gem_ddr      -> Rebin(2);
+    me11_unfurled_ddr -> Rebin(2);
 
-    me11->Rebin(50);
-    me21->Rebin(50);
-    me31->Rebin(50);
-    me41->Rebin(50);
+    me11->Rebin(2);
+    me21->Rebin(2);
+    me31->Rebin(2);
+    me41->Rebin(2);
+
 
     //------------------------------------------------------------------------------------------------------------------
     //
@@ -147,6 +151,21 @@ void gen_plots () {
     (lostevents_ddr_arr[2])->SetMarkerStyle(3);
     (lostevents_ddr_arr[3])->SetMarkerStyle(3);
 
+    Float_t ymax = 1;
+    //TLine *line = new TLine(0,ymax/2,50,ymax/2);
+    TLine *line = new TLine(7.5,0,7.5,ymax/2);
+    line->SetLineColor(kGray);
+    line->Draw();
+
+   //draw an axis on the right side
+   // TGaxis::TGaxis(Double_t xmin, Double_t ymin, Double_t xmax, Double_t ymax,
+   //                Double_t wmin, Double_t wmax, Int_t ndiv, Option_t *chopt,
+   //                Double_t gridlength)
+//   TGaxis *axis = new TGaxis(gPad->GetUxmin(),gPad->GetUymax(),
+//         gPad->GetUxmax(), gPad->GetUymax(),0,rightmax,510,"+L");
+//   axis->SetLineColor(kRed);
+//   axis->SetLabelColor(kRed);
+//   axis->Draw();
 
     //------------------------------------------------------------------------------------------------------------------
     //
@@ -169,6 +188,9 @@ void gen_plots () {
     leg1->SetFillStyle(0);
     leg1->SetBorderSize(0);
     leg1->Draw();
+
+    //------------------------------------------------------------------------------------------------------------------
+    line->Draw();
 
     //------------------------------------------------------------------------------------------------------------------
     // ME1/1 Mitigation Comparison
@@ -197,7 +219,7 @@ void gen_plots () {
     me11_theory              -> Draw("SAME");
     me11_theory_ddr          -> Draw("SAME");
     me11_theory_deep         -> Draw("SAME");
-
+    me11_theory_ddr_deep     -> Draw("SAME");
 
     //-Legend-----------------------------------------------------------------------------------------------------------
 
@@ -213,6 +235,9 @@ void gen_plots () {
     leg3->Draw();
 
     //------------------------------------------------------------------------------------------------------------------
+    line->Draw();
+
+    //------------------------------------------------------------------------------------------------------------------
     // ME1/1 GEM Comparison
     //------------------------------------------------------------------------------------------------------------------
 
@@ -226,10 +251,14 @@ void gen_plots () {
     //-Alternates-------------------------------------------------------------------------------------------------------
 
     me11_gem          -> Draw("SAME");
+    me11_ddr          -> Draw("SAME");
     me11_gem_ddr      -> Draw("SAME");
 
     me11_gem->SetMarkerStyle(3);
     me11_gem->SetMarkerColor(kMagenta-6);
+
+    me11_gem_ddr->SetMarkerStyle(3);
+    me11_gem_ddr->SetMarkerColor(kOrange-6);
 
     //-Theory-----------------------------------------------------------------------------------------------------------
 
@@ -252,6 +281,10 @@ void gen_plots () {
     leg7->SetFillStyle(0);
     leg7->SetBorderSize(0);
     leg7->Draw();
+
+    //------------------------------------------------------------------------------------------------------------------
+    line->Draw();
+
 
     //------------------------------------------------------------------------------------------------------------------
     // ME1/1 Unfurled Triads
@@ -289,10 +322,7 @@ void gen_plots () {
     leg8->SetBorderSize(0);
     leg8->Draw();
 
-    Float_t ymax = 1;
-    //TLine *line = new TLine(0,ymax/2,50,ymax/2);
-    TLine *line = new TLine(7.5,0,7.5,ymax/2);
-    line->SetLineColor(kGray);
+    //------------------------------------------------------------------------------------------------------------------
     line->Draw();
 
 
@@ -312,6 +342,9 @@ void gen_plots () {
     leg2->SetFillStyle(0);
     leg2->SetBorderSize(0);
     leg2->Draw();
+
+    //------------------------------------------------------------------------------------------------------------------
+    line->Draw();
 
     //------------------------------------------------------------------------------------------------------------------
     // Station Comparison
@@ -339,6 +372,9 @@ void gen_plots () {
     leg4->Draw();
 
     //------------------------------------------------------------------------------------------------------------------
+    line->Draw();
+
+    //------------------------------------------------------------------------------------------------------------------
     //
     //------------------------------------------------------------------------------------------------------------------
 
@@ -349,6 +385,7 @@ void gen_plots () {
     me11_theory_14tbins      ->Draw("same");
     me11_theory_14tbins_ddr  ->Draw("same");
     me11_theory_ddr          ->Draw("same");
+    me11_theory_ddr_deep     ->Draw("same");
 
     TLegend* leg5 = new TLegend(0.15,0.65,0.48,0.85);
 
@@ -362,6 +399,9 @@ void gen_plots () {
     leg5->SetBorderSize(0);
 
     leg5->Draw();
+
+    //------------------------------------------------------------------------------------------------------------------
+    line->Draw();
 
     //------------------------------------------------------------------------------------------------------------------
     //
@@ -380,5 +420,8 @@ void gen_plots () {
     pretrig_sep->SetMarkerStyle(3);
 
     pretrig_sep->Draw();
+
+    //------------------------------------------------------------------------------------------------------------------
+    line->Draw();
 
 }

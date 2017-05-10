@@ -4,6 +4,8 @@
 #include <TMath.h>
 #include <TRandom.h>
 #include <algorithm>
+#include <TSystem.h>
+#include <TApplication.h>
 
 #include "fence_distance.h"
 #include "frame_count.h"
@@ -19,12 +21,12 @@ bool debug_core=0;
 bool no_bx_skipping=0;
 
 // sim options
-const int speedup = 4;
+const int speedup = 1;
 const bool low_lumi_only = 0;
 const bool gen_once = 0;
-const int min_lost = 10;
-const int seconds_cutoff = 1;
-const bool me11_only = 0;
+const int min_lost = 5;
+const int seconds_cutoff = 240;
+const bool me11_only = 1;
 
 const int loss_hunt_threshold = 0;
 
@@ -36,8 +38,6 @@ int tmb_model () {
     HistGetter loss_hists;
 
     HistGetter misc_hists;
-
-    rando.SetSeed(1);
 
     //------------------------------------------------------------------------------------------------------------------
     //
@@ -52,8 +52,9 @@ int tmb_model () {
     int ymax  = 1;
 
 
-    loss_hists.getOrMake2D ("h2_loss_me11_unfurled_ddr" , "Lost Event Rate (ME1/1)"                      , xbins , xmin , xmax , ybins , ymin , ymax);
+    loss_hists.getOrMake2D ("h2_loss_me11_unfurled_ddr" , "Lost Event Rate Unfurled Triads (ME1/1)"      , xbins , xmin , xmax , ybins , ymin , ymax);
     loss_hists.getOrMake2D ("h2_loss_me11_deep"         , "Lost Event Rate Deep Buffer (ME1/1)"          , xbins , xmin , xmax , ybins , ymin , ymax);
+    loss_hists.getOrMake2D ("h2_loss_me11_deep_ddr"     , "Lost Event Rate Deep Buffer DDR (ME1/1)"      , xbins , xmin , xmax , ybins , ymin , ymax);
     loss_hists.getOrMake2D ("h2_loss_me11_lowl1"        , "Lost Event Rate 128bx Latency Buffer (ME1/1)" , xbins , xmin , xmax , ybins , ymin , ymax);
     loss_hists.getOrMake2D ("h2_loss_me11_gem"          , "Lost Event Rate with GEM (ME1/1)"             , xbins , xmin , xmax , ybins , ymin , ymax);
     loss_hists.getOrMake2D ("h2_loss_me11_gem_ddr"      , "Lost Event Rate with GEM + DDR(ME1/1)"        , xbins , xmin , xmax , ybins , ymin , ymax);
@@ -73,7 +74,7 @@ int tmb_model () {
     };
 
 
-    for (int i=0; i<(loss_hists.getN2D() ); i++) {
+    for (unsigned i=0; i<(loss_hists.getN2D() ); i++) {
 
         auto h2 = (TH2F*) loss_hists.get2D(i);
 
@@ -212,11 +213,11 @@ int tmb_model () {
 
     //------------------------------------------------------------------------------------------------------------------
 
-       for (int lum = (debug_core) ? 495 : 1; // luminosity 5 = (0.5*10^34)
-             lum < 500 / (low_lumi_only ? 3 : 1);  // e.g. 500 = 50 * 10^{34}
-             lum+=2*speedup) {
+       for (int lum = ((debug_core) ? 495 : 1); // luminosity 5 = (0.5*10^34)
+             lum < (low_lumi_only ? 150 : 500);  // e.g. 500 = 50 * 10^{34}
+             lum+=speedup) {
 
-        printf("lum=%f\n", float(lum)/10);
+        //printf("lum=%f\n", float(lum));
 
         int buf_depth = deep_buffer ? 4096 : 2048;
 
@@ -247,8 +248,7 @@ int tmb_model () {
         int l1a_match_cnt       = 0;
         int num_stalls          = 0;
 
-        int seconds = 0;
-        unsigned long long bx_sum = 0;
+        double seconds = 0;
 
         unsigned long long sum_queue_occupancy = 0;
 
@@ -351,6 +351,9 @@ int tmb_model () {
                 // Calculate BX for *next* pretrigger
                 //------------------------------------------------------------------------------------------------------
 
+
+                rando.SetSeed(0);
+
                 float sep = -log(1-rando.Uniform(1)) / (mean_rate*25.0 / pow(10,9));
 
                 if (istation==0 && !ddr_readout && !gem_en && !low_l1) {
@@ -383,7 +386,7 @@ int tmb_model () {
 
                     preclct_lost++;
 
-                    if (debug_core) printf("pretrig dropped, sep=%4i, bx=%12i, delta=%12i, lost=%3i, total=%8i, lumi=%5.2f * 10^{34}\n", separation ,bx, bx-last_lost_bx, preclct_lost, preclct_cnt, float(lum)/10.);
+                    if (debug_core) printf("pretrig dropped, sep=%4i, bx=%12llu, delta=%12llu, lost=%3i, total=%8i, lumi=%5.2f * 10^{34}\n", separation ,bx, bx-last_lost_bx, preclct_lost, preclct_cnt, float(lum)/10.);
 
                     if (loss_hunt_threshold>0) {
                         last_lost_bx=bx;
@@ -397,7 +400,7 @@ int tmb_model () {
                 else {
                     pretrig_queue.push_back (bx);
                     short_ro_queue.push_back (0);
-                    if (debug_core) printf("pretrig pushed   @ bx=%4i, wr_adr=%4i, rd_adr=%4i, distance=%i, events in pretrig queue=%i\n", bx, ring_buffer.wr_adr(), ring_buffer.rd_adr(), distance, (int) pretrig_queue.size());
+                    if (debug_core) printf("pretrig pushed   @ bx=%4llu, wr_adr=%4i, rd_adr=%4i, distance=%i, events in pretrig queue=%i\n", bx, ring_buffer.wr_adr(), ring_buffer.rd_adr(), distance, (int) pretrig_queue.size());
                 }
 
                 preclct_cnt ++;
@@ -436,7 +439,7 @@ int tmb_model () {
 
                         sum_queue_occupancy += fence_queue.size();
 
-                        if (debug_core) printf("event pushed     @ bx=%4i, wr_adr=%4i, rd_adr=%4i, distance=%i, events in l1a queue=%i\n", bx, ring_buffer.wr_adr(), ring_buffer.rd_adr(), distance, (int) fence_queue.size());
+                        if (debug_core) printf("event pushed     @ bx=%4llu, wr_adr=%4i, rd_adr=%4i, distance=%i, events in l1a queue=%i\n", bx, ring_buffer.wr_adr(), ring_buffer.rd_adr(), distance, (int) fence_queue.size());
 
                     }
 
@@ -480,7 +483,7 @@ int tmb_model () {
                     rd_finish_bx = bx + cnt;
 
 
-                    if (debug_core) printf("readout started  @ bx=%4i, wr_adr=%4i, rd_adr=%4i, distance=%i, events in l1a queue=%i\n", bx, ring_buffer.wr_adr(), ring_buffer.rd_adr(), distance, (int) fence_queue.size());
+                    if (debug_core) printf("readout started  @ bx=%4llu, wr_adr=%4i, rd_adr=%4i, distance=%i, events in l1a queue=%i\n", bx, ring_buffer.wr_adr(), ring_buffer.rd_adr(), distance, (int) fence_queue.size());
 
                 }
 
@@ -495,7 +498,7 @@ int tmb_model () {
                     // pop from queue after readout
                     fence_queue.erase(fence_queue.begin());
 
-                    if (debug_core) printf("readout finished @ bx=%4i, wr_adr=%4i, rd_adr=%4i, distance=%i, events in l1a queue=%i\n", bx, ring_buffer.wr_adr(), ring_buffer.rd_adr(), distance, (int) fence_queue.size());
+                    if (debug_core) printf("readout finished @ bx=%4llu, wr_adr=%4i, rd_adr=%4i, distance=%i, events in l1a queue=%i\n", bx, ring_buffer.wr_adr(), ring_buffer.rd_adr(), distance, (int) fence_queue.size());
                 }
 
 
@@ -524,7 +527,7 @@ int tmb_model () {
             if (no_bx_skipping)
                 next_bx_rqst=-1;
 
-            if (next_bx_rqst!=-1) {
+            if (next_bx_rqst!=unsigned long long(-1)) {
                 delta_bx = next_bx_rqst - bx;
                 bx = next_bx_rqst;
                 if (delta_bx==0) {
@@ -545,21 +548,14 @@ int tmb_model () {
 
             if (!buf_stalled) {
                 // we get a readout signal l1a_delay later than the event pretrigger time
-                if (debug_core) printf("incrementing wr_buf by %i", delta_bx);
+                if (debug_core) printf("incrementing wr_buf by %llu", delta_bx);
                 if (debug_core) printf("   from %i", ring_buffer.wr_adr());
                 ring_buffer.inc_wr_adr(delta_bx);
                 if (debug_core) printf("   to %i\n", ring_buffer.wr_adr());
             }
 
 
-            // how in the world can we handle this?
-
-            bx_sum += delta_bx;
-            if (bx_sum > 40000000) {
-                 seconds++;
-                 bx_sum=0;
-                 //printf("    seconds=%i, lost=%i (%e)\n", seconds, preclct_lost, preclct_lost/float(preclct_cnt));
-            }
+            seconds = bx / 40e6;
 
             if (debug_core && bx>2322)
                 return 0;
@@ -572,7 +568,10 @@ int tmb_model () {
             //    (1) we had a preclct on this bx
 
             if (!debug_core) {
-            if (seconds>seconds_cutoff || (preclct_cnt >= 200000/(speedup) && loss_hunt_threshold<=0 && preclct_lost >= min_lost)) {
+
+            int min_pretrigs = lum < 150 ? 1000000 : 200000;
+
+            if (seconds>seconds_cutoff || (preclct_cnt >= min_pretrigs/(speedup) && loss_hunt_threshold<=0 && preclct_lost >= min_lost)) {
 
                 float preclct_rate = (float(preclct_cnt) * pow(10,9) / (25. * bx)); // Hz
                 float readout_rate = (l1a_match_cnt      * pow(10,9) / (25. * bx)); // Hz
@@ -580,8 +579,9 @@ int tmb_model () {
 
                 float lost_event_frac = float (preclct_lost)/float(preclct_cnt); // fraction
 
-                float luminosity = preclct_rate * l1a_match_fraction / lumi_rate / 10000.;
-                printf("preclct_rate=%7.1f kHz, readout_rate=%5.1f kHz, preclct_cnt=%7i, pretrigs_dropped=%5i, mean_occupancy=%4.2f, luminosity=%4.1f *10^34, lhc_seconds=%i\n",
+                //float luminosity = preclct_rate * l1a_match_fraction / lumi_rate / 10000.;
+                float luminosity = lum/10.;
+                printf("preclct_rate=%7.1f kHz, readout_rate=%5.1f kHz, preclct_cnt=%7i, pretrigs_dropped=%5i, mean_occupancy=%4.2f, luminosity=%4.1f *10^34, lhc_seconds=%f\n",
                         preclct_rate/1000.,
                         readout_rate/1000.,
                         preclct_cnt,
@@ -594,31 +594,38 @@ int tmb_model () {
 
                 // low l1a latency mode
                 if (low_l1 && istation==0 && !ddr_readout && !deep_buffer && !gem_en) {
-                    loss_hists.get2D("h2_loss_me11_lowl1") -> Fill(luminosity, lost_event_frac);
+                    loss_hists.get2D("h2_loss_me11_lowl1") -> Fill(lum/10., lost_event_frac);
                 }
                 // deep buffers
-                else if (deep_buffer==1 && !low_l1 && !ddr_readout && istation==0 && !gem_en) {
-                    loss_hists.get2D("h2_loss_me11_deep") -> Fill(luminosity, lost_event_frac);
+                else if (deep_buffer==1 && !low_l1 && istation==0 && !gem_en) {
+                    if (ddr_readout)
+                        loss_hists.get2D("h2_loss_me11_deep_ddr") -> Fill(lum/10., lost_event_frac);
+                    else
+                        loss_hists.get2D("h2_loss_me11_deep") -> Fill(lum/10., lost_event_frac);
                 }
-                else if (ddr_readout && !low_l1 && !gem_en && !unfurled_triads) {
-                        (lostevents_ddr_arr[istation])  -> Fill(luminosity, lost_event_frac);
+                // ddr readout
+                else if (ddr_readout && !deep_buffer && !low_l1 && !gem_en && !unfurled_triads) {
+                        (lostevents_ddr_arr[istation])  -> Fill(lum/10., lost_event_frac);
                 }
+                // gem
                 else if (gem_en && !low_l1 && !ddr_readout) {
-                        loss_hists.get2D("h2_loss_me11_gem") -> Fill(luminosity, lost_event_frac);
+                    if (ddr_readout)
+                        loss_hists.get2D("h2_loss_me11_gem_ddr") -> Fill(lum/10., lost_event_frac);
+                    else
+                        loss_hists.get2D("h2_loss_me11_gem") -> Fill(lum/10., lost_event_frac);
                 }
-                else if (gem_en && !low_l1 && ddr_readout) {
-                        loss_hists.get2D("h2_loss_me11_gem_ddr") -> Fill(luminosity, lost_event_frac);
-                }
+                // unfurled triads
                 else if (unfurled_triads && ddr_readout && !gem_en && !low_l1) {
-                        loss_hists.get2D("h2_loss_me11_unfurled_ddr") -> Fill(luminosity, lost_event_frac);
+                        loss_hists.get2D("h2_loss_me11_unfurled_ddr") -> Fill(lum/10., lost_event_frac);
                 }
+                // baselines
                 else if (!gem_en && !low_l1 && !gem_en && !ddr_readout) {
 
-                        (lostevents_arr[istation])  -> Fill(luminosity, lost_event_frac);
+                        (lostevents_arr[istation])  -> Fill(lum/10., lost_event_frac);
 
                         if (istation==0) {
-                            misc_hists.get2D("h2_buf_stall") -> Fill(luminosity, stall_rate);
-                            misc_hists.get2D("h2_queue_occupancy") -> Fill (luminosity, sum_queue_occupancy/double(l1a_match_cnt));
+                            misc_hists.get2D("h2_buf_stall") -> Fill(lum/10., stall_rate);
+                            misc_hists.get2D("h2_queue_occupancy") -> Fill (lum/10., sum_queue_occupancy/double(l1a_match_cnt));
                         }
                 }
 

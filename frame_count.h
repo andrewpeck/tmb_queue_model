@@ -11,6 +11,7 @@ int frame_count (int n_cfebs=7, int gem_en=0, bool unfurled_triads=0, int n_tbin
     //int n_cfebs      = 7;
     //int n_tbins      = 12;
     int n_gems       = 2;
+    int n_tbins_gem = 6;
     int n_rpcs       = 2;
     int n_scope_chan = 128;
 
@@ -29,7 +30,7 @@ int frame_count (int n_cfebs=7, int gem_en=0, bool unfurled_triads=0, int n_tbin
 
     // rpc + gem
     int wc_b04        = (rpc_en || gem_en) ? 1 : 0;
-    int wc_gems       = gem_en ? n_gems  * 8 * n_tbins : 0;
+    int wc_gems       = gem_en ? n_gems  * 8 * n_tbins_gem : 0;
     int wc_rpcs       = rpc_en ? 2*n_rpcs*n_tbins : 0;
     int wc_e04        = (rpc_en || gem_en) ? 1 : 0;
 
