@@ -11,6 +11,8 @@
 #include "frame_count.h"
 #include "ring_buffer.h"
 #include "HistGetter.h"
+#include "lumi_scaling.h"
+#include <TThread.h>
 
 
 TRandom rando;
@@ -30,14 +32,26 @@ const bool me11_only = 1;
 
 const int loss_hunt_threshold = 0;
 
+struct Config_t {
+    int istation;
+    bool ddr_readout;
+    bool gem_en;
+    bool deep_buffer;
+    bool low_l1;
+    bool unfurled_triads;
+    TH2F* h2;
+    TH2F* h2_pretrig_sep;
+    TH2F* h2_event_sep;
+};
+
+int   model_tmb (struct Config_t config );
+void* model_tmb_thread (void*);
+
+
+HistGetter loss_hists;
+HistGetter misc_hists;
 
 int tmb_model () {
-
-    bool first_gen_done = 0;
-
-    HistGetter loss_hists;
-
-    HistGetter misc_hists;
 
     //------------------------------------------------------------------------------------------------------------------
     //
@@ -51,28 +65,215 @@ int tmb_model () {
     int ymin  = 0;
     int ymax  = 1;
 
+    std::vector<struct Config_t> configs;
 
-    loss_hists.getOrMake2D ("h2_loss_me11_unfurled_ddr" , "Lost Event Rate Unfurled Triads (ME1/1)"      , xbins , xmin , xmax , ybins , ymin , ymax);
-    loss_hists.getOrMake2D ("h2_loss_me11_deep"         , "Lost Event Rate Deep Buffer (ME1/1)"          , xbins , xmin , xmax , ybins , ymin , ymax);
-    loss_hists.getOrMake2D ("h2_loss_me11_deep_ddr"     , "Lost Event Rate Deep Buffer DDR (ME1/1)"      , xbins , xmin , xmax , ybins , ymin , ymax);
-    loss_hists.getOrMake2D ("h2_loss_me11_lowl1"        , "Lost Event Rate 128bx Latency Buffer (ME1/1)" , xbins , xmin , xmax , ybins , ymin , ymax);
-    loss_hists.getOrMake2D ("h2_loss_me11_gem"          , "Lost Event Rate with GEM (ME1/1)"             , xbins , xmin , xmax , ybins , ymin , ymax);
-    loss_hists.getOrMake2D ("h2_loss_me11_gem_ddr"      , "Lost Event Rate with GEM + DDR(ME1/1)"        , xbins , xmin , xmax , ybins , ymin , ymax);
+    TH2F* h2;
+    struct Config_t config;
 
-    TH2F* lostevents_arr [4] = {
-        (TH2F*) loss_hists.getOrMake2D ("h2_loss_me11", "Lost Event Rate (ME1/1)",  xbins, xmin, xmax, ybins, ymin, ymax),
-        (TH2F*) loss_hists.getOrMake2D ("h2_loss_me21", "Lost Event Rate (ME2/1)",  xbins, xmin, xmax, ybins, ymin, ymax),
-        (TH2F*) loss_hists.getOrMake2D ("h2_loss_me31", "Lost Event Rate (ME3/1)",  xbins, xmin, xmax, ybins, ymin, ymax),
-        (TH2F*) loss_hists.getOrMake2D ("h2_loss_me41", "Lost Event Rate (ME4/1)",  xbins, xmin, xmax, ybins, ymin, ymax)
-    };
+    //------------------------------------------------------------------------------------------------------------------
+    //
+    //------------------------------------------------------------------------------------------------------------------
 
-    TH2F* lostevents_ddr_arr [4] = {
-        (TH2F*) loss_hists.getOrMake2D ("h2_loss_me11_ddr", "Lost Event Rate @ DDR (ME1/1)",  xbins, xmin, xmax, ybins, ymin, ymax),
-        (TH2F*) loss_hists.getOrMake2D ("h2_loss_me21_ddr", "Lost Event Rate @ DDR (ME2/1)",  xbins, xmin, xmax, ybins, ymin, ymax),
-        (TH2F*) loss_hists.getOrMake2D ("h2_loss_me31_ddr", "Lost Event Rate @ DDR (ME3/1)",  xbins, xmin, xmax, ybins, ymin, ymax),
-        (TH2F*) loss_hists.getOrMake2D ("h2_loss_me41_ddr", "Lost Event Rate @ DDR (ME4/1)",  xbins, xmin, xmax, ybins, ymin, ymax)
-    };
+    h2 = (TH2F*) misc_hists.getOrMake2D ("h2_buf_stall", "Buffer Stall Rate (ME1/1)",  xbins, xmin, xmax, ybins, ymin, 500000);
 
+    h2-> GetXaxis()->SetTitle("luminosity (10^{34} cm^{-2} s^{-1})");
+    h2-> GetYaxis()->SetTitle("Rate (Hz)");
+
+    h2 = (TH2F*) misc_hists.getOrMake2D ("h2_queue_occupancy", "Mean L1A Queue Occupancy",  500, 0, 50, 100, 0, 100);
+    h2 -> GetXaxis()->SetTitle("luminosity (10^{34} cm^{-2} s^{-1})");
+    h2 -> GetYaxis()->SetTitle("#l1as in queue");
+
+    h2 = (TH2F*) misc_hists.getOrMake2D ("h2_event_sep", "Event Separation",  500, 0, 50, 10000, 0, 10000);
+    h2 -> GetXaxis()->SetTitle("luminosity (10^{34} cm^{-2} s^{-1})");
+    h2 -> GetYaxis()->SetTitle("separation between readouts, me11 baseline");
+
+    h2 = (TH2F*) misc_hists.getOrMake2D ("h2_pretrig_sep", "Event Separation",  500, 0, 50, 10000, 0, 10000);
+    h2 -> GetXaxis()->SetTitle("luminosity (10^{34} cm^{-2} s^{-1})");
+    h2 -> GetYaxis()->SetTitle("separation between pretrigs, me11 baseline");
+
+    // me11 unfurled ddr
+
+    h2 = (TH2F*) loss_hists.getOrMake2D ("h2_loss_me11_unfurled_ddr" , "Lost Event Rate Unfurled Triads (ME1/1)"      , xbins , xmin , xmax , ybins , ymin , ymax);
+
+    config.istation=0;
+    config.ddr_readout=1;
+    config.gem_en=0;
+    config.deep_buffer=0;
+    config.low_l1=0;
+    config.unfurled_triads=1;
+    config.h2=h2;
+
+    configs.push_back(config);
+
+    // me11 deep buffers
+
+    h2 = (TH2F*) loss_hists.getOrMake2D ("h2_loss_me11_deep"         , "Lost Event Rate Deep Buffer (ME1/1)"          , xbins , xmin , xmax , ybins , ymin , ymax);
+
+    config.istation=0;
+    config.ddr_readout=0;
+    config.gem_en=0;
+    config.deep_buffer=1;
+    config.low_l1=0;
+    config.unfurled_triads=0;
+    config.h2=h2;
+
+    configs.push_back(config);
+
+    //-me11 deep buffers + ddr------------------------------------------------------------------------------------------
+
+    h2 = (TH2F*) loss_hists.getOrMake2D ("h2_loss_me11_deep_ddr"     , "Lost Event Rate Deep Buffer DDR (ME1/1)"      , xbins , xmin , xmax , ybins , ymin , ymax);
+
+    config.istation=0;
+    config.ddr_readout=1;
+    config.gem_en=0;
+    config.deep_buffer=1;
+    config.low_l1=0;
+    config.unfurled_triads=0;
+    config.h2=h2;
+
+    configs.push_back(config);
+
+    //-me11 low l1 latency 3.12u----------------------------------------------------------------------------------------
+
+    h2 = (TH2F*) loss_hists.getOrMake2D ("h2_loss_me11_lowl1"        , "Lost Event Rate 128bx Latency Buffer (ME1/1)" , xbins , xmin , xmax , ybins , ymin , ymax);
+
+    config.istation=0;
+    config.ddr_readout=0;
+    config.gem_en=0;
+    config.deep_buffer=0;
+    config.low_l1=1;
+    config.unfurled_triads=0;
+    config.h2=h2;
+
+    configs.push_back(config);
+
+    //-me11 GEM---------------------------------------------------------------------------------------------------------
+
+    h2 = (TH2F*) loss_hists.getOrMake2D ("h2_loss_me11_gem"          , "Lost Event Rate with GEM (ME1/1)"             , xbins , xmin , xmax , ybins , ymin , ymax);
+
+    config.istation=0;
+    config.ddr_readout=0;
+    config.gem_en=1;
+    config.deep_buffer=0;
+    config.low_l1=0;
+    config.unfurled_triads=0;
+    config.h2=h2;
+
+    configs.push_back(config);
+
+    //-me11 GEM ddr-----------------------------------------------------------------------------------------------------
+
+    h2 = (TH2F*) loss_hists.getOrMake2D ("h2_loss_me11_gem_ddr"      , "Lost Event Rate with GEM + DDR(ME1/1)"        , xbins , xmin , xmax , ybins , ymin , ymax);
+
+    config.istation=0;
+    config.ddr_readout=1;
+    config.gem_en=1;
+    config.deep_buffer=0;
+    config.low_l1=0;
+    config.unfurled_triads=0;
+    config.h2=h2;
+
+    configs.push_back(config);
+
+    //-me234/1----------------------------------------------------------------------------------------------------------
+
+    h2 = (TH2F*) loss_hists.getOrMake2D ("h2_loss_me11", "Lost Event Rate (ME1/1)",  xbins, xmin, xmax, ybins, ymin, ymax);
+
+    config.istation=0;
+    config.ddr_readout=0;
+    config.gem_en=0;
+    config.deep_buffer=0;
+    config.low_l1=0;
+    config.unfurled_triads=0;
+    config.h2=h2;
+
+    configs.push_back(config);
+
+    h2 = (TH2F*) loss_hists.getOrMake2D ("h2_loss_me21", "Lost Event Rate (ME2/1)",  xbins, xmin, xmax, ybins, ymin, ymax);
+
+    config.istation=1;
+    config.ddr_readout=0;
+    config.gem_en=0;
+    config.deep_buffer=0;
+    config.low_l1=0;
+    config.unfurled_triads=0;
+    config.h2=h2;
+
+    configs.push_back(config);
+
+    h2 = (TH2F*) loss_hists.getOrMake2D ("h2_loss_me31", "Lost Event Rate (ME3/1)",  xbins, xmin, xmax, ybins, ymin, ymax);
+
+    config.istation=2;
+    config.ddr_readout=0;
+    config.gem_en=0;
+    config.deep_buffer=0;
+    config.low_l1=0;
+    config.unfurled_triads=0;
+    config.h2=h2;
+
+    configs.push_back(config);
+
+    h2 = (TH2F*) loss_hists.getOrMake2D ("h2_loss_me41", "Lost Event Rate (ME4/1)",  xbins, xmin, xmax, ybins, ymin, ymax);
+
+    config.istation=3;
+    config.ddr_readout=0;
+    config.gem_en=0;
+    config.deep_buffer=0;
+    config.low_l1=0;
+    config.unfurled_triads=0;
+    config.h2=h2;
+
+    configs.push_back(config);
+
+    //-me234/1----------------------------------------------------------------------------------------------------------
+
+    h2 = (TH2F*) loss_hists.getOrMake2D ("h2_loss_me11_ddr", "Lost Event Rate @ DDR (ME1/1)",  xbins, xmin, xmax, ybins, ymin, ymax);
+
+    config.istation=0;
+    config.ddr_readout=1;
+    config.gem_en=0;
+    config.deep_buffer=0;
+    config.low_l1=0;
+    config.unfurled_triads=0;
+    config.h2=h2;
+
+    configs.push_back(config);
+
+    h2 = (TH2F*) loss_hists.getOrMake2D ("h2_loss_me21_ddr", "Lost Event Rate @ DDR (ME2/1)",  xbins, xmin, xmax, ybins, ymin, ymax);
+
+    config.istation=1;
+    config.ddr_readout=1;
+    config.gem_en=0;
+    config.deep_buffer=0;
+    config.low_l1=0;
+    config.unfurled_triads=0;
+    config.h2=h2;
+
+    configs.push_back(config);
+
+    h2 = (TH2F*) loss_hists.getOrMake2D ("h2_loss_me31_ddr", "Lost Event Rate @ DDR (ME3/1)",  xbins, xmin, xmax, ybins, ymin, ymax);
+
+    config.istation=2;
+    config.ddr_readout=1;
+    config.gem_en=0;
+    config.deep_buffer=0;
+    config.low_l1=0;
+    config.unfurled_triads=0;
+    config.h2=h2;
+
+    configs.push_back(config);
+
+    h2 = (TH2F*) loss_hists.getOrMake2D ("h2_loss_me41_ddr", "Lost Event Rate @ DDR (ME4/1)",  xbins, xmin, xmax, ybins, ymin, ymax);
+
+    config.istation=3;
+    config.ddr_readout=1;
+    config.gem_en=0;
+    config.deep_buffer=0;
+    config.low_l1=0;
+    config.unfurled_triads=0;
+    config.h2=h2;
+
+    configs.push_back(config);
 
     for (unsigned i=0; i<(loss_hists.getN2D() ); i++) {
 
@@ -97,14 +298,14 @@ int tmb_model () {
         // Axis_t to        = axis->GetYmax();
         // Axis_t width     = (to - from) / bins;
 
-        //printf("from=%f, to=%f, width=%f\n", from, to, width);
+        //TThread::Printf("from=%f, to=%f, width=%f\n", from, to, width);
 
         Axis_t *new_bins = new Axis_t[bins + 1];
 
         for (int i = 0; i <= bins; i++) {
             float edge = 1/TMath::Power(10, from + 10*(bins-i) * width);
             new_bins[i]  = edge; // - (i==0 ? 0 : new_bins[i-1]);
-            //printf("bin=%i, edge=%f\n", i, edge);
+            //TThread::Printf("bin=%i, edge=%f\n", i, edge);
         }
         axis->Set(bins, new_bins);
         delete [] new_bins;
@@ -112,112 +313,77 @@ int tmb_model () {
 
     }
 
-    //------------------------------------------------------------------------------------------------------------------
-    //
-    //------------------------------------------------------------------------------------------------------------------
-
-    auto h2 = (TH2F*) misc_hists.getOrMake2D ("h2_buf_stall", "Buffer Stall Rate (ME1/1)",  xbins, xmin, xmax, ybins, ymin, 500000);
-
-    h2-> GetXaxis()->SetTitle("luminosity (10^{34} cm^{-2} s^{-1})");
-    h2-> GetYaxis()->SetTitle("Rate (Hz)");
-
-    h2 = (TH2F*) misc_hists.getOrMake2D ("h2_queue_occupancy", "Mean L1A Queue Occupancy",  500, 0, 50, 100, 0, 100);
-    h2 -> GetXaxis()->SetTitle("luminosity (10^{34} cm^{-2} s^{-1})");
-    h2 -> GetYaxis()->SetTitle("#l1as in queue");
-
-    h2 = (TH2F*) misc_hists.getOrMake2D ("h2_event_sep", "Event Separation",  500, 0, 50, 10000, 0, 10000);
-    h2 -> GetXaxis()->SetTitle("luminosity (10^{34} cm^{-2} s^{-1})");
-    h2 -> GetYaxis()->SetTitle("separation between readouts, me11 baseline");
-
-    h2 = (TH2F*) misc_hists.getOrMake2D ("h2_pretrig_sep", "Event Separation",  500, 0, 50, 10000, 0, 10000);
-    h2 -> GetXaxis()->SetTitle("luminosity (10^{34} cm^{-2} s^{-1})");
-    h2 -> GetYaxis()->SetTitle("separation between pretrigs, me11 baseline");
 
     #include "lumi_scaling.h"
 
-    for (int istation=0; istation<4; istation++) {
-    for (int ddr_readout=0; ddr_readout<2; ddr_readout++) {
-    for (int gem_en=0; gem_en<2; gem_en++) {
-    for (int deep_buffer=0; deep_buffer<2; deep_buffer++) {
-    for (int low_l1=0; low_l1<2; low_l1++) {
-    for (int unfurled_triads=0; unfurled_triads<2; unfurled_triads++) {
+    std::vector<TThread*> threads;
+    for (auto const& this_config : configs) {
+        void* ptr = (void*) (&this_config);
+        TThread *tt = new TThread (model_tmb_thread, ptr);
+        threads.push_back(tt);
+        tt->Run();
+        //model_tmb_thread (ptr);
+        //model_tmb (this_config);
+        TThread::Ps();
+    }
+
+    for (auto const& thread : threads) {
+        thread->Join();
+    }
+
+
+
+    loss_hists.write("tmb_model_loss.root");
+    misc_hists.write("tmb_model_misc.root");
+
+    if (loss_hunt_threshold<=0) {
+        gSystem->Exec("hadd -f tmb_model.root tmb_model_loss.root tmb_model_misc.root");
+    }
+
+    gApplication->Terminate();
+    return 0;
+}
+
+void* model_tmb_thread (void* ptr) {
+    struct Config_t config = *((Config_t*) ptr);
+    model_tmb (config);
+    return nullptr;
+}
+
+int model_tmb (struct Config_t config) {
+
+    int istation         = config.istation         ;
+    bool ddr_readout     = config.ddr_readout      ;
+    bool gem_en          = config.gem_en          ;
+    bool deep_buffer     = config.deep_buffer     ;
+    bool low_l1          = config.low_l1          ;
+    bool unfurled_triads = config.unfurled_triads ;
+    TH2F* h2             = config.h2               ;
 
     //--------------------------------------------------------------------------------------------------------------
-    // special cases
-    //--------------------------------------------------------------------------------------------------------------
-
-
-    //bool sim_deep_buffer = (deep_buffer==1) && (low_l1==0 && ddr_readout==0 && istation==0 && gem_en==0);
-
-    if (me11_only && istation!=0)
-        break;
-
-    if (unfurled_triads==1 && !(low_l1==0 && ddr_readout==1 && istation==0 && gem_en==0)) {
-        if (debug) printf("break-1\n");
-        if (debug) printf("Station=%i, ddr_enabled=%i, gem_en=%i, deep_buffer=%i, low_l1_latency=%i\n", istation, ddr_readout, gem_en, deep_buffer, low_l1);
-        break;
-    }
-
-    if (deep_buffer==1 && !(low_l1==0 && ddr_readout==0 && istation==0 && gem_en==0)) { // simulate deep buffer only at me11
-        if (debug) printf("break0\n");
-        if (debug) printf("Station=%i, ddr_enabled=%i, gem_en=%i, deep_buffer=%i, low_l1_latency=%i\n", istation, ddr_readout, gem_en, deep_buffer, low_l1);
-        break;
-    }
-
-    if (low_l1==1 && !(istation==0 && ddr_readout==0 && deep_buffer==0))   { // simulate low l1a only at me11
-        if (debug) printf("break1\n");
-        if (debug) printf("Station=%i, ddr_enabled=%i, gem_en=%i, deep_buffer=%i, low_l1_latency=%i\n", istation, ddr_readout, gem_en, deep_buffer, low_l1);
-        break;
-    }
-
-    if (ddr_readout==1 && istation!=0) { // only need ddr simulation for me11
-        if (debug) printf("break1\n");
-        if (debug) printf("Station=%i, ddr_enabled=%i, gem_en=%i, deep_buffer=%i, low_l1_latency=%i\n", istation, ddr_readout, gem_en, deep_buffer, low_l1);
-        break;
-    }
-
-    if (gem_en==1 && !(istation==0 && deep_buffer==0 && low_l1==0 && loss_hunt_threshold<=0)) { // only need gem simulation for me11
-        if (debug) printf("break3\n");
-        if (debug) printf("Station=%i, ddr_enabled=%i, gem_en=%i, deep_buffer=%i, low_l1_latency=%i\n", istation, ddr_readout, gem_en, deep_buffer, low_l1);
-        break;
-    }
-
-    if (loss_hunt_threshold>0 && !(gem_en==0 && istation==0 && ddr_readout==0 && deep_buffer==0 && low_l1==1)) { // only need gem simulation for me11
-        if (debug) printf("break4\n");
-        if (debug) printf("Station=%i, ddr_enabled=%i, gem_en=%i, deep_buffer=%i, low_l1_latency=%i\n", istation, ddr_readout, gem_en, deep_buffer, low_l1);
-        break;
-    }
-
-    if (gen_once && first_gen_done)
-        break;
-
-    first_gen_done=1;
-
-    printf("Station=%i, ddr_enabled=%i, gem_en=%i, deep_buffer=%i, low_l1_latency=%i, unfurled_triads=%i\n", istation, ddr_readout, gem_en, deep_buffer, low_l1, unfurled_triads);
-
-    //--------------------------------------------------------------------------------------------------------------
-
     int n_cfebs = (istation==0) ? 7 : 5;
 
     float lumi_rate          = lumi_rate_arr[istation];
     float lumi_rate_pre      = lumi_rate_pre_arr[istation];
     float l1a_match_fraction = lumi_rate/lumi_rate_pre;
 
-    unsigned long long l1a_latency = (low_l1 || debug_core) ? 128 : 500;
+    uint64_t l1a_latency = (low_l1 || debug_core) ? 128 : 500;
 
     int frame_cnt = frame_count (n_cfebs, gem_en, unfurled_triads);
     double dmb_readout_rate = 1000000.0/(frame_cnt*25); // DMB readout time, kHz
 
-    printf("Frame count          : %i \n", frame_cnt);
-    printf("Maximumn readout rate: %f kHz\n", dmb_readout_rate);
+    TThread::Lock();
+    TThread::Printf("Frame count          : %i \n", frame_cnt);
+    TThread::Printf("Maximumn readout rate: %f kHz\n", dmb_readout_rate);
+    TThread::UnLock();
 
     //------------------------------------------------------------------------------------------------------------------
 
-       for (int lum = ((debug_core) ? 495 : 1); // luminosity 5 = (0.5*10^34)
-             lum < (low_lumi_only ? 150 : 500);  // e.g. 500 = 50 * 10^{34}
-             lum+=speedup) {
+    for (int lum = ((debug_core) ? 495 : 1); // luminosity 5 = (0.5*10^34)
+            lum < (low_lumi_only ? 150 : 500);  // e.g. 500 = 50 * 10^{34}
+            lum+=speedup) {
 
-        //printf("lum=%f\n", float(lum));
+        //TThread::Printf("lum=%f\n", float(lum));
 
         int buf_depth = deep_buffer ? 4096 : 2048;
 
@@ -233,13 +399,13 @@ int tmb_model () {
         std::vector<bool> short_ro_queue;
 
 
-        long long unsigned bx = 0;
-        long long unsigned delta_bx = 1;
-        long long unsigned last_lost_bx = 0;
-        long long unsigned pretrig_bx = 256;
+        uint64_t bx = 0;
+        uint64_t delta_bx = 1;
+        uint64_t last_lost_bx = 0;
+        uint64_t pretrig_bx = 256;
 
         bool rd_started  = 0;
-        long long unsigned rd_finish_bx = -1;
+        uint64_t rd_finish_bx = -1;
 
         int distance = buf_depth;
 
@@ -250,7 +416,7 @@ int tmb_model () {
 
         double seconds = 0;
 
-        unsigned long long sum_queue_occupancy = 0;
+        uint64_t sum_queue_occupancy = 0;
 
         bool keep_stalled_events = 0;
 
@@ -260,7 +426,7 @@ int tmb_model () {
 
 
             //if (bx>255)
-                //if (debug_core) printf("                 @ bx=%4i, wr_adr=%4i, rd_adr=%4i, events in l1a queue=%i\n", bx, ring_buffer.wr_adr(), ring_buffer.rd_adr(), (int) fence_queue.size());
+            //if (debug_core) TThread::Printf("                 @ bx=%4i, wr_adr=%4i, rd_adr=%4i, events in l1a queue=%i\n", bx, ring_buffer.wr_adr(), ring_buffer.rd_adr(), (int) fence_queue.size());
 
             // need to check bx
             // (1) when fence_queue[0] changes
@@ -269,38 +435,9 @@ int tmb_model () {
             //     (b)  the bx where a pretrigger is spawned
             // when advancing the bx number by >1 , we also need to advance the ring buffer wr_adr by the same amount
 
-
-            // pretrig pushed   @ bx= 256, wr_adr= 256, rd_adr=   0, events in pretrig queue=1
-            // event pushed     @ bx= 384, wr_adr= 384, rd_adr=   0, events in l1a queue=1
-            // readout started  @ bx= 384, wr_adr= 384, rd_adr= 256, events in l1a queue=1
-            // pretrig pushed   @ bx= 434, wr_adr= 434, rd_adr= 306, events in pretrig queue=1
-            // pretrig pushed   @ bx= 481, wr_adr= 481, rd_adr= 353, events in pretrig queue=2
-            // event pushed     @ bx= 562, wr_adr= 562, rd_adr= 434, events in l1a queue=2
-            // pretrig pushed   @ bx= 572, wr_adr= 572, rd_adr= 444, events in pretrig queue=2
-            // event pushed     @ bx= 609, wr_adr= 609, rd_adr= 481, events in l1a queue=3
-            // event pushed     @ bx= 700, wr_adr= 700, rd_adr= 572, events in l1a queue=4
-            // pretrig pushed   @ bx= 760, wr_adr= 760, rd_adr= 632, events in pretrig queue=1
-            // event pushed     @ bx= 888, wr_adr= 888, rd_adr= 760, events in l1a queue=5
-            // readout finished @ bx= 936, wr_adr= 936, rd_adr= 808, events in l1a queue=4
-            // readout started  @ bx= 937, wr_adr= 937, rd_adr= 434, events in l1a queue=4
-            // pretrig pushed   @ bx=1488, wr_adr=1488, rd_adr= 985, events in pretrig queue=1
-            // readout finished @ bx=1489, wr_adr=1489, rd_adr= 986, events in l1a queue=3
-            // readout started  @ bx=1490, wr_adr=1490, rd_adr= 481, events in l1a queue=3
-            // pretrig pushed   @ bx=1534, wr_adr=1534, rd_adr= 525, events in pretrig queue=2
-            // event pushed     @ bx=1616, wr_adr=1616, rd_adr= 607, events in l1a queue=4
-            // event pushed     @ bx=1662, wr_adr=1662, rd_adr= 653, events in l1a queue=5
-            // pretrig pushed   @ bx=1833, wr_adr=1833, rd_adr= 824, events in pretrig queue=1
-            // pretrig pushed   @ bx=1896, wr_adr=1896, rd_adr= 887, events in pretrig queue=2
-            // event pushed     @ bx=1961, wr_adr=1961, rd_adr= 952, events in l1a queue=6
-            // event pushed     @ bx=2024, wr_adr=2024, rd_adr=1015, events in l1a queue=7
-            // readout finished @ bx=2042, wr_adr=2042, rd_adr=1033, events in l1a queue=6
-            // readout started  @ bx=2043, wr_adr=2043, rd_adr= 572, events in l1a queue=6
-
-
-            unsigned long long delta_bx      = 0;
-            unsigned long long last_event_bx = 0;
-            unsigned long long next_bx_rqst  = -1;
-
+            uint64_t delta_bx      = 0;
+            uint64_t last_event_bx = 0;
+            uint64_t next_bx_rqst  = -1;
 
             //----------------------------------------------------------------------------------------------------------
             // Fence Distance
@@ -311,12 +448,12 @@ int tmb_model () {
             if (fence_queue.size() > 0) {
                 // make sure that the fence buffer has space--- otherwise we should stall here
                 distance = fence_distance(fence_queue[0], ring_buffer.wr_adr(), buf_depth);
-                //printf ("distance=%i (queue=%i - wr_adr=%i)\n", distance, fence_queue[0], ring_buffer.wr_adr());
+                //TThread::Printf ("distance=%i (queue=%i - wr_adr=%i)\n", distance, fence_queue[0], ring_buffer.wr_adr());
             }
             else {
                 buf_stalled = 0;
                 distance = l1a_latency;
-                //if (debug_core) printf("bx=%llu queue empty\n", bx);
+                //if (debug_core) TThread::Printf("bx=%llu queue empty\n", bx);
             }
 
             //----------------------------------------------------------------------------------------------------------
@@ -358,7 +495,7 @@ int tmb_model () {
 
                 if (istation==0 && !ddr_readout && !gem_en && !low_l1) {
                     misc_hists.get2D("h2_pretrig_sep") -> Fill(float(lum)/10,sep);
-                    //printf("filling pretrig sep Fill(%f, %i)\n", float(lum)/10, sep);
+                    //TThread::Printf("filling pretrig sep Fill(%f, %i)\n", float(lum)/10, sep);
                 }
 
                 int separation = (int) sep;
@@ -375,8 +512,8 @@ int tmb_model () {
                 //------------------------------------------------------------------------------------------------------
 
                 if (buf_stalled) {
-                    //if (debug_core) printf("Event lost (buf stalled)!\n");
-                    //if (debug_core) printf("bx=%lld\n",bx);
+                    //if (debug_core) TThread::Printf("Event lost (buf stalled)!\n");
+                    //if (debug_core) TThread::Printf("bx=%lld\n",bx);
 
                     if (keep_stalled_events) {
                         // keep the event but mark for short-mode readout
@@ -386,7 +523,7 @@ int tmb_model () {
 
                     preclct_lost++;
 
-                    if (debug_core) printf("pretrig dropped, sep=%4i, bx=%12llu, delta=%12llu, lost=%3i, total=%8i, lumi=%5.2f * 10^{34}\n", separation ,bx, bx-last_lost_bx, preclct_lost, preclct_cnt, float(lum)/10.);
+                    if (debug_core) TThread::Printf("pretrig dropped, sep=%4i, bx=%12llu, delta=%12llu, lost=%3i, total=%8i, lumi=%5.2f * 10^{34}\n", separation ,bx, bx-last_lost_bx, preclct_lost, preclct_cnt, float(lum)/10.);
 
                     if (loss_hunt_threshold>0) {
                         last_lost_bx=bx;
@@ -400,7 +537,7 @@ int tmb_model () {
                 else {
                     pretrig_queue.push_back (bx);
                     short_ro_queue.push_back (0);
-                    if (debug_core) printf("pretrig pushed   @ bx=%4llu, wr_adr=%4i, rd_adr=%4i, distance=%i, events in pretrig queue=%i\n", bx, ring_buffer.wr_adr(), ring_buffer.rd_adr(), distance, (int) pretrig_queue.size());
+                    if (debug_core) TThread::Printf("pretrig pushed   @ bx=%4llu, wr_adr=%4i, rd_adr=%4i, distance=%i, events in pretrig queue=%i\n", bx, ring_buffer.wr_adr(), ring_buffer.rd_adr(), distance, (int) pretrig_queue.size());
                 }
 
                 preclct_cnt ++;
@@ -431,7 +568,7 @@ int tmb_model () {
 
                         if (istation==0 && !ddr_readout && !gem_en && !low_l1) {
                             misc_hists.get2D("h2_event_sep") -> Fill(float(lum)/10, bx-last_event_bx);
-                            //printf("filling event sep Fill(%f, %i)\n", float(lum)/10, bx-last_event_bx);
+                            //TThread::Printf("filling event sep Fill(%f, %i)\n", float(lum)/10, bx-last_event_bx);
                             last_event_bx = bx;
                         }
 
@@ -439,7 +576,7 @@ int tmb_model () {
 
                         sum_queue_occupancy += fence_queue.size();
 
-                        if (debug_core) printf("event pushed     @ bx=%4llu, wr_adr=%4i, rd_adr=%4i, distance=%i, events in l1a queue=%i\n", bx, ring_buffer.wr_adr(), ring_buffer.rd_adr(), distance, (int) fence_queue.size());
+                        if (debug_core) TThread::Printf("event pushed     @ bx=%4llu, wr_adr=%4i, rd_adr=%4i, distance=%i, events in l1a queue=%i\n", bx, ring_buffer.wr_adr(), ring_buffer.rd_adr(), distance, (int) fence_queue.size());
 
                     }
 
@@ -483,7 +620,7 @@ int tmb_model () {
                     rd_finish_bx = bx + cnt;
 
 
-                    if (debug_core) printf("readout started  @ bx=%4llu, wr_adr=%4i, rd_adr=%4i, distance=%i, events in l1a queue=%i\n", bx, ring_buffer.wr_adr(), ring_buffer.rd_adr(), distance, (int) fence_queue.size());
+                    if (debug_core) TThread::Printf("readout started  @ bx=%4llu, wr_adr=%4i, rd_adr=%4i, distance=%i, events in l1a queue=%i\n", bx, ring_buffer.wr_adr(), ring_buffer.rd_adr(), distance, (int) fence_queue.size());
 
                 }
 
@@ -498,7 +635,7 @@ int tmb_model () {
                     // pop from queue after readout
                     fence_queue.erase(fence_queue.begin());
 
-                    if (debug_core) printf("readout finished @ bx=%4llu, wr_adr=%4i, rd_adr=%4i, distance=%i, events in l1a queue=%i\n", bx, ring_buffer.wr_adr(), ring_buffer.rd_adr(), distance, (int) fence_queue.size());
+                    if (debug_core) TThread::Printf("readout finished @ bx=%4llu, wr_adr=%4i, rd_adr=%4i, distance=%i, events in l1a queue=%i\n", bx, ring_buffer.wr_adr(), ring_buffer.rd_adr(), distance, (int) fence_queue.size());
                 }
 
 
@@ -522,12 +659,12 @@ int tmb_model () {
             next_bx_rqst = std::min(next_bx_rqst, bx+distance);
 
             next_bx_rqst = std::min(next_bx_rqst, pretrig_bx);
-            //printf ("request @ bx=%i (current_bx=%i)\n", next_bx_rqst, bx);
+            //TThread::Printf ("request @ bx=%i (current_bx=%i)\n", next_bx_rqst, bx);
 
             if (no_bx_skipping)
                 next_bx_rqst=-1;
 
-            if (next_bx_rqst!=unsigned long long(-1)) {
+            if (next_bx_rqst!=uint64_t(-1)) {
                 delta_bx = next_bx_rqst - bx;
                 bx = next_bx_rqst;
                 if (delta_bx==0) {
@@ -548,10 +685,10 @@ int tmb_model () {
 
             if (!buf_stalled) {
                 // we get a readout signal l1a_delay later than the event pretrigger time
-                if (debug_core) printf("incrementing wr_buf by %llu", delta_bx);
-                if (debug_core) printf("   from %i", ring_buffer.wr_adr());
+                if (debug_core) TThread::Printf("incrementing wr_buf by %llu", delta_bx);
+                if (debug_core) TThread::Printf("   from %i", ring_buffer.wr_adr());
                 ring_buffer.inc_wr_adr(delta_bx);
-                if (debug_core) printf("   to %i\n", ring_buffer.wr_adr());
+                if (debug_core) TThread::Printf("   to %i\n", ring_buffer.wr_adr());
             }
 
 
@@ -569,73 +706,36 @@ int tmb_model () {
 
             if (!debug_core) {
 
-            int min_pretrigs = lum < 150 ? 1000000 : 200000;
+                int min_pretrigs = lum < 150 ? 1000000 : 200000;
 
-            if (seconds>seconds_cutoff || (preclct_cnt >= min_pretrigs/(speedup) && loss_hunt_threshold<=0 && preclct_lost >= min_lost)) {
+                if (seconds>seconds_cutoff || (preclct_cnt >= min_pretrigs/(speedup) && loss_hunt_threshold<=0 && preclct_lost >= min_lost)) {
 
-                float preclct_rate = (float(preclct_cnt) * pow(10,9) / (25. * bx)); // Hz
-                float readout_rate = (l1a_match_cnt      * pow(10,9) / (25. * bx)); // Hz
-                float stall_rate   = (num_stalls         * pow(10,9) / (25. * bx)); // Hz
+                    float preclct_rate = (float(preclct_cnt) * pow(10,9) / (25. * bx)); // Hz
+                    float readout_rate = (l1a_match_cnt      * pow(10,9) / (25. * bx)); // Hz
+                    float stall_rate   = (num_stalls         * pow(10,9) / (25. * bx)); // Hz
 
-                float lost_event_frac = float (preclct_lost)/float(preclct_cnt); // fraction
+                    float lost_event_frac = float (preclct_lost)/float(preclct_cnt); // fraction
 
-                //float luminosity = preclct_rate * l1a_match_fraction / lumi_rate / 10000.;
-                float luminosity = lum/10.;
-                printf("preclct_rate=%7.1f kHz, readout_rate=%5.1f kHz, preclct_cnt=%7i, pretrigs_dropped=%5i, mean_occupancy=%4.2f, luminosity=%4.1f *10^34, lhc_seconds=%f\n",
-                        preclct_rate/1000.,
-                        readout_rate/1000.,
-                        preclct_cnt,
-                        preclct_lost, // lost_event_frac * 100.0 * 1000,
-                        sum_queue_occupancy/double(l1a_match_cnt),
-                        luminosity,
-                        seconds
-                      );
+                    //float luminosity = preclct_rate * l1a_match_fraction / lumi_rate / 10000.;
+                    float luminosity = lum/10.;
+                    TThread::Printf("preclct_rate=%7.1f kHz, readout_rate=%5.1f kHz, preclct_cnt=%7i, pretrigs_dropped=%5i, mean_occupancy=%4.2f, luminosity=%4.1f *10^34, lhc_seconds=%f\n",
+                            preclct_rate/1000.,
+                            readout_rate/1000.,
+                            preclct_cnt,
+                            preclct_lost, // lost_event_frac * 100.0 * 1000,
+                            sum_queue_occupancy/double(l1a_match_cnt),
+                            luminosity,
+                            seconds
+                          );
 
+                    h2->Fill(lum/10., lost_event_frac);
 
-                // low l1a latency mode
-                if (low_l1 && istation==0 && !ddr_readout && !deep_buffer && !gem_en) {
-                    loss_hists.get2D("h2_loss_me11_lowl1") -> Fill(lum/10., lost_event_frac);
+                    break;
                 }
-                // deep buffers
-                else if (deep_buffer==1 && !low_l1 && istation==0 && !gem_en) {
-                    if (ddr_readout)
-                        loss_hists.get2D("h2_loss_me11_deep_ddr") -> Fill(lum/10., lost_event_frac);
-                    else
-                        loss_hists.get2D("h2_loss_me11_deep") -> Fill(lum/10., lost_event_frac);
-                }
-                // ddr readout
-                else if (ddr_readout && !deep_buffer && !low_l1 && !gem_en && !unfurled_triads) {
-                        (lostevents_ddr_arr[istation])  -> Fill(lum/10., lost_event_frac);
-                }
-                // gem
-                else if (gem_en && !low_l1 && !ddr_readout) {
-                    if (ddr_readout)
-                        loss_hists.get2D("h2_loss_me11_gem_ddr") -> Fill(lum/10., lost_event_frac);
-                    else
-                        loss_hists.get2D("h2_loss_me11_gem") -> Fill(lum/10., lost_event_frac);
-                }
-                // unfurled triads
-                else if (unfurled_triads && ddr_readout && !gem_en && !low_l1) {
-                        loss_hists.get2D("h2_loss_me11_unfurled_ddr") -> Fill(lum/10., lost_event_frac);
-                }
-                // baselines
-                else if (!gem_en && !low_l1 && !gem_en && !ddr_readout) {
-
-                        (lostevents_arr[istation])  -> Fill(lum/10., lost_event_frac);
-
-                        if (istation==0) {
-                            misc_hists.get2D("h2_buf_stall") -> Fill(lum/10., stall_rate);
-                            misc_hists.get2D("h2_queue_occupancy") -> Fill (lum/10., sum_queue_occupancy/double(l1a_match_cnt));
-                        }
-                }
-
-
-                break;
-            }
             }
             else if (loss_hunt_threshold>0) {
                 if (preclct_lost > loss_hunt_threshold) {
-                    printf("\nDONE\n");
+                    TThread::Printf("\nDONE\n");
                     return 0;
                 }
             }
@@ -643,21 +743,10 @@ int tmb_model () {
         } // while true
 
     } // luminosity
-
-    }
-    }
-    }
-    }
-    }
-    }
-
-    loss_hists.write("tmb_model_loss.root");
-    misc_hists.write("tmb_model_misc.root");
-
-    if (loss_hunt_threshold<=0) {
-        gSystem->Exec("hadd -f tmb_model.root tmb_model_loss.root tmb_model_misc.root");
-    }
-
-    gApplication->Terminate();
     return 0;
+}
+
+int main() {
+    tmb_model();
+    return 1;
 }
